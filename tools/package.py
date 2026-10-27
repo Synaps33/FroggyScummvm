@@ -76,8 +76,10 @@ def build_package(target_type):  # 'sf2000' or 'gb300'
     os.makedirs(scumm_roms, exist_ok=True)
 
     # Copy test games
-    for gdir in ("monkey-demo", "atlantis-demo", "samnmax-demo", "dig-demo"):
+    for gdir in ("monkey-demo", "atlantis-demo", "samnmax-demo", "dig-demo", "comi-demo", "ft-demo"):
         src_path = os.path.join(TEST_ROMS, gdir)
+        if not os.path.isdir(src_path):
+            src_path = os.path.join("/media/Sajnaps/GB300/ROMS/scummvm", gdir)
         if os.path.isdir(src_path):
             shutil.copytree(src_path, os.path.join(scumm_roms, gdir), dirs_exist_ok=True)
 
@@ -92,6 +94,8 @@ def build_package(target_type):  # 'sf2000' or 'gb300'
         ("Atlantis.gba", "scummvm;scummvm;atlantis-demo/PLAYFATE.001.\n", "indy_05_final.png"),
         ("TheDig.gba", "scummvm;scummvm;dig-demo/dig.la0.\n", "dig_04_gameplay.png"),
         ("SamAndMax.gba", "scummvm;scummvm;samnmax-demo/snmdemo.sm0.\n", "samnmax_04_gameplay.png"),
+        ("CurseOfMonkeyIsland.gba", "scummvm;scummvm;comi-demo/COMI.LA0.\n", "comi_05_final.png"),
+        ("FullThrottle.gba", "scummvm;scummvm;ft-demo/FT.000.\n", "ft_04_gameplay.png"),
         ("scummvm.gba", "scummvm;scummvm;scummvm.ini.\n", "tour_01_boot.png"),
     ]
 
@@ -136,26 +140,32 @@ def build_package(target_type):  # 'sf2000' or 'gb300'
     # Readme
     with open(os.path.join(pkg_dir, "README.txt"), "w") as f:
         f.write(
-            f"ScummVM Standalone Port for {target_type.upper()} / FrogUI\n"
+            f"FroggyScummVM Standalone Port for {target_type.upper()} / FrogUI\n"
             "==========================================================\n\n"
-            "Gry w zestawie:\n"
+            "Included Playable Games & Demos:\n"
             "- The Secret of Monkey Island (EGA Demo)\n"
-            "- Indiana Jones and the Fate of Atlantis (VGA Demo)\n\n"
-            "Sterowanie na konsoli:\n"
-            "- D-Pad: Ruch kursorem myszy\n"
-            "- A / L: Lewy przycisk myszy (Klik / Akcja / Wybór)\n"
-            "- B / R: Prawy przycisk myszy\n"
-            "- Start: Menu glowne ScummVM (Zapis/Wczytanie/Opcje)\n"
-            "- Select / X: Spacja / Pominiecie dialogu / Klawiatura ekranowa\n"
-            "- Y: Escape (Pauza / Wyjscie)\n\n"
-            "Instalacja:\n"
-            "1. Skopiuj zawartosc tego folderu na glowny katalog karty SD konsoli.\n"
-            "2. W menu konsoli lub FrogUI wejdz do zakladki ScummVM lub ROMS.\n"
-            "3. Uruchom 'MonkeyIsland.gba' lub 'Atlantis.gba'.\n\n"
-            "Dodawanie nowych gier:\n"
-            "- Utworz folder dla gry w ROMS/scummvm/<nazwa_gry>/\n"
-            "- Utworz plik launcher: ROMS/scummvm/<nazwa_gry>.gba z trescia:\n"
-            "  scummvm;scummvm/<nazwa_gry>;<plik_glowny_gry>\n"
+            "- Indiana Jones and the Fate of Atlantis (VGA Demo)\n"
+            "- Sam & Max Hit the Road (Interactive DOS Demo)\n"
+            "- The Dig (DOS CD Demo)\n"
+            "- The Curse of Monkey Island (COMI Small Demo)\n"
+            "- Full Throttle (DOS Interactive Demo)\n\n"
+            "Controls:\n"
+            "- D-Pad: Move virtual mouse cursor (adaptive speed)\n"
+            "- A / L: Left mouse button (Click / Interact / Select)\n"
+            "- B / R: Right mouse button (Examine / Cancel)\n"
+            "- Start: ScummVM in-game menu (Save / Load / Settings)\n"
+            "- Select / X: Space bar (Skip dialogue)\n"
+            "- Y: Escape (Pause / Skip cutscene)\n\n"
+            "Installation:\n"
+            "1. Extract all contents of this archive to the root directory of your microSD card.\n"
+            "2. Insert the card into your console and turn it on.\n"
+            "3. In FrogUI, browse to the ScummVM category or ROMS/ folder.\n"
+            "4. Launch any game .gba stub with button A.\n\n"
+            "Adding New Games:\n"
+            "- Put your game files into ROMS/scummvm/<game_name>/\n"
+            "- Create a launcher file ROMS/scummvm/<GameName>.gba containing:\n"
+            "  scummvm;scummvm/<game_name>;<main_game_file>.\n"
+            "  (Note the trailing dot at the end!)\n"
         )
 
     # Create zip archive
