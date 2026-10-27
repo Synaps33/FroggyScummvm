@@ -146,7 +146,10 @@ int OSystem_libretro::testGame(const char *filedata, bool autodetect) {
 	if (autodetect) {
 		Common::FSNode dir = Common::FSNode(Common::Path(data));
 		Common::FSList files;
-		dir.getChildren(files, Common::FSNode::kListAll);
+		bool got_children = dir.getChildren(files, Common::FSNode::kListAll);
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_INFO, "[scummvm debug] testGame data='%s' isDir=%d gotChildren=%d files=%d\n",
+				data.c_str(), dir.isDirectory(), got_children, (int)files.size());
 
 		DetectionResults detectionResults = EngineMan.detectGames(files);
 		if (!detectionResults.listRecognizedGames().empty()) {

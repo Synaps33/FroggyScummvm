@@ -94,7 +94,7 @@ static int pointer_device = RETRO_DEVICE_JOYPAD; // default pointer/mouse device
 char cmd_params[20][200];
 char cmd_params_num;
 
-static uint8 video_hw_mode = 0;
+static uint8 video_hw_mode = VIDEO_GRAPHIC_MODE_REQUEST_SW;
 
 static unsigned base_width = RES_W_OVERLAY;
 static unsigned base_height = RES_H_OVERLAY;
@@ -211,6 +211,7 @@ static void setup_hw_rendering(void) {
 	}
 #endif
 	if ((video_hw_mode & VIDEO_GRAPHIC_MODE_REQUEST_SW) || !video_hw_mode) {
+		video_hw_mode = VIDEO_GRAPHIC_MODE_REQUEST_SW;
 		pixel_fmt = RETRO_PIXEL_FORMAT_RGB565;
 		if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pixel_fmt) && retro_log_cb)
 			retro_log_cb(RETRO_LOG_WARN, "RETRO_PIXEL_FORMAT_RGB565 not supported.\n");
@@ -330,9 +331,26 @@ static void update_variables(void) {
 	struct retro_variable var;
 	updating_variables = true;
 
+	// Default handheld gamepad-to-mouse mappings (essential for baremetal frontends like SF2000/GB300)
+	mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_UP, "RETROKE_UP");
+	mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_DOWN, "RETROKE_DOWN");
+	mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_LEFT, "RETROKE_LEFT");
+	mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_RIGHT, "RETROKE_RIGHT");
+	mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_A, "RETROKE_LEFT_BUTTON");
+	mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_B, "RETROKE_RIGHT_BUTTON");
+	mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_X, "RETROK_SPACE");
+	mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_Y, "RETROK_ESCAPE");
+	mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_SELECT, "RETROK_SPACE");
+	mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_START, "RETROKE_SCUMMVM_GUI");
+	mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_L, "RETROKE_LEFT_BUTTON");
+	mapper_set_device_keys(RETRO_DEVICE_ID_JOYPAD_R, "RETROKE_RIGHT_BUTTON");
+
+	pointer_device = RETRO_DEVICE_JOYPAD;
+	gamepad_cursor_speed = 2.0f;
+	gamepad_acceleration_time = 0.1f;
+
 	var.key = "scummvm_pointer_device";
 	var.value = NULL;
-	pointer_device = RETRO_DEVICE_JOYPAD;
 	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
 		if (strcmp(var.value, "mouse") == 0)
 			pointer_device = RETRO_DEVICE_MOUSE;
@@ -1166,12 +1184,17 @@ bool retro_load_game(const struct retro_game_info *game) {
 		// Retrieve the game path.
 		Common::FSNode detect_target = Common::FSNode(game->path);
 		Common::FSNode parent_dir = detect_target.getParent();
+		if (retro_log_cb)
+			retro_log_cb(RETRO_LOG_INFO, "[scummvm debug] detect_target='%s' parent_dir='%s'\n",
+				detect_target.getPath().toString().c_str(), parent_dir.getPath().toString().c_str());
 		char target_id[400] = {0};
 		char buffer[400] = {0};
 		int test_game_status = TEST_GAME_KO_NOT_FOUND;
 
 		const char *target_file_ext = ".scummvm";
 		int target_file_ext_pos = strlen(game->path) - strlen(target_file_ext);
+		const char *gba_file_ext = ".gba";
+		int gba_file_ext_pos = strlen(game->path) - strlen(gba_file_ext);
 
 		// See if we are loading a .scummvm file.
 		if (!(target_file_ext_pos < 0) && strstr(game->path + target_file_ext_pos, target_file_ext) != NULL) {
@@ -1200,17 +1223,70 @@ bool retro_load_game(const struct retro_game_info *game) {
 			}
 
 			test_game_status = LIBRETRO_G_SYSTEM->testGame(target_id, false);
+		} else if (Common::String(game->path).hasSuffixIgnoreCase(".gba")) {
+			// Loading a .gba launcher stub from FrogUI / Multicore
+			FILE *gf = fopen(game->path, "rb");
+			if (gf) {
+				char line[512] = {0};
+				if (fgets(line, sizeof(line), gf)) {
+					char *nl = strchr(line, '\r'); if (nl) *nl = 0;
+					nl = strchr(line, '\n'); if (nl) *nl = 0;
+					char *part1 = line;
+					char *part2 = strchr(part1, ';');
+					char *target_file = NULL;
+					if (part2) {
+						*part2++ = 0;
+						char *part3 = strchr(part2, ';');
+						if (part3) {
+							*part3++ = 0;
+							target_file = part3;
+						} else {
+							target_file = part2;
+						}
+					} else {
+						target_file = part1;
+					}
+
+					size_t tlen = strlen(target_file);
+					while (tlen > 0 && (target_file[tlen - 1] == '.' || target_file[tlen - 1] == ' ' || target_file[tlen - 1] == '/')) {
+						target_file[--tlen] = 0;
+					}
+
+					if (tlen > 0 && strstr(target_file, "scummvm.ini") == NULL) {
+						Common::String gba_dir = detect_target.getParent().getPath().toString();
+						Common::String tstr = target_file;
+						Common::String rel_target = tstr;
+						if (rel_target.hasPrefix("scummvm/")) {
+							rel_target = Common::String(rel_target.c_str() + 8);
+						}
+
+						Common::Array<Common::String> candidates;
+						candidates.push_back(gba_dir + "/" + rel_target);
+						candidates.push_back(gba_dir + "/" + tstr);
+						candidates.push_back(Common::String("/mnt/sda1/ROMS/scummvm/") + rel_target);
+						candidates.push_back(Common::String("/mnt/sda1/ROMS/scummvm/") + tstr);
+						candidates.push_back(Common::String("/mnt/sda1/ROMS/") + tstr);
+
+						for (size_t cd = 0; cd < candidates.size(); cd++) {
+							Common::FSNode cand_node((Common::Path(candidates[cd].c_str())));
+							if (cand_node.exists()) {
+								if (!cand_node.isDirectory())
+									cand_node = cand_node.getParent();
+								test_game_status = LIBRETRO_G_SYSTEM->testGame(cand_node.getPath().toString().c_str(), true);
+								if (test_game_status == TEST_GAME_OK_ID_AUTODETECTED || test_game_status == TEST_GAME_OK_ID_FOUND) {
+									parent_dir = cand_node;
+									break;
+								}
+							}
+						}
+					}
+				}
+				fclose(gf);
+			}
 		} else {
 			if (detect_target.isDirectory()) {
 				parent_dir = detect_target;
-			} else {
-				// If this node has no parent node, then it returns a duplicate of this node.
-				if (detect_target.getPath().equals(parent_dir.getPath())) {
-					retro_log_cb(RETRO_LOG_ERROR, "[scummvm] Autodetect not possible. No parent directory detected in '%s'.\n", game->path);
-					return false;
-				}
 			}
-
 			test_game_status = LIBRETRO_G_SYSTEM->testGame(parent_dir.getPath().toString().c_str(), true);
 		}
 
@@ -1303,6 +1379,10 @@ void retro_run(void) {
 		audio_video_enable = RETRO_AV_ENABLE_VIDEO | RETRO_AV_ENABLE_AUDIO;
 
 	if (g_system) {
+		if (poll_cb)
+			poll_cb();
+		LIBRETRO_G_SYSTEM->processInputs();
+
 		/* Switch to ScummVM thread */
 		retro_switch_to_emu_thread();
 
@@ -1317,17 +1397,14 @@ void retro_run(void) {
 
 		/* Retrieve video */
 		if (audio_video_enable & 1) {
-			if (video_hw_mode & VIDEO_GRAPHIC_MODE_REQUEST_SW) {
-				const Graphics::ManagedSurface *screen;
+			const Graphics::ManagedSurface *screen = nullptr;
+			if (LIBRETRO_G_SYSTEM) {
 				LIBRETRO_G_SYSTEM->getScreen(screen);
+			}
+			if (screen && screen->getPixels()) {
 				video_cb(screen->getPixels(), screen->w, screen->h, screen->pitch);
-			} else
-				video_cb(RETRO_HW_FRAME_BUFFER_VALID, LIBRETRO_G_SYSTEM->getScreenWidth(),  LIBRETRO_G_SYSTEM->getScreenHeight(), 0);
-
+			}
 		}
-
-		poll_cb();
-		LIBRETRO_G_SYSTEM->processInputs();
 	}
 
 	retro_midi_queue_drain();

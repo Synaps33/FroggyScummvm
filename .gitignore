@@ -316,3 +316,17 @@ __pycache__/
 #Ignore Claude instruction files
 CLAUDE.md
 .claude
+
+# SF2000 / GB300 artifacts
+dist/
+build_core/
+test_roms/
+*.sf2k
+*.gb3k
+*.asd
+*.ppm
+config.h.engines
+config.mk.engines
+backends/platform/libretro/config.mk
+runner/test_runner
+scummvm.ini

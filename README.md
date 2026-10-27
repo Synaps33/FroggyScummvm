@@ -1,80 +1,135 @@
-# [ScummVM README](https://www.scummvm.org/) · [![Translation status](https://translations.scummvm.org/widgets/scummvm/-/scummvm/svg-badge.svg)](https://translations.scummvm.org/engage/scummvm/?utm_source=widget) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md#pull-requests)
+# FroggyScummVM
 
-## About ScummVM
+**FroggyScummVM** is a standalone, hardware-tailored port of **ScummVM** for the **Data Frog SF2000** and **GB300 / GB300 V2** handheld retro consoles running the MIPS32r2 SoC.
 
-ScummVM allows you to play classic graphic point-and-click adventure games, text adventure games, and RPGs, as long as you already have the game data files. ScummVM replaces the executable files shipped with the games, which means you can now play your favorite games on all your favorite devices.
+It integrates seamlessly with **FrogUI** and the multicore loader, featuring direct game launching via `.gba` stubs, custom handheld joypad-to-virtual-mouse mapping, full audio mixing, and 320×200/240 native pixel scaling.
 
-So how did ScummVM get its name? Many of the famous LucasArts adventure games, such as Maniac Mansion and the Monkey Island series, were created using a utility called SCUMM (Script Creation Utility for Maniac Mansion). The ‘VM’ in ScummVM stands for Virtual Machine.
+---
 
-While ScummVM was originally designed to run LucasArts’ SCUMM games, over time support has been added for many other games: see the full list [on our wiki](https://wiki.scummvm.org/index.php?title=Category:Supported_Games). Noteworthy titles include Broken Sword, Myst and Blade Runner, although there are countless other hidden gems to explore.
+## Features
 
-For more information, compatibility lists, details on donating, the
-latest release, progress reports and more, please visit the ScummVM [home
-page](https://www.scummvm.org/).
+- **Standalone Execution:** Runs natively on bare metal via `core_87000000` / `scummvm.sf2k` / `scummvm.gb3k` without requiring RetroArch.
+- **FrogUI Integration:** Launches directly from the FrogUI game list with cover thumbnails (`.rgb565`) and auto-detection.
+- **Direct Joypad Mouse Control:** Smooth, multi-tiered virtual mouse emulation with cursor acceleration driven directly by the console D-Pad.
+- **Tailored Memory Footprint:** Optimized lightweight build using ~11 MB of RAM, leaving ~47 MB of heap room on the console's memory pool.
+- **Full Sound Support:** Real-time software MIDI / AdLib / OPL synthesis and digital voice / SFX playback downmixed for the console's mono speaker / headphone jack.
+- **Supported Engines (Lite Embedded Set):**
+  - **SCUMM v1 – v8:** *The Secret of Monkey Island*, *Monkey Island 2: LeChuck's Revenge*, *Indiana Jones and the Fate of Atlantis*, *Day of the Tentacle*, *Sam & Max Hit the Road*, *Full Throttle*, *The Dig*, *The Curse of Monkey Island*.
+  - **SKY:** *Beneath a Steel Sky*.
+  - **AGI:** Classic Sierra adventure titles (*King's Quest*, *Space Quest*, *Leisure Suit Larry*).
+  - **Queen:** *Flight of the Amazon Queen*.
+  - **Gob:** *Gobliiins* series.
 
-## Quickstart
+---
 
-For the impatient among you, here is how to get ScummVM running in five simple steps.
+## Controls
 
-1. Download ScummVM from [our website](https://www.scummvm.org/downloads/) and install it.
+The handheld controls are mapped directly to ScummVM inputs in real time:
 
-2. Create a directory on your hard drive and copy the game datafiles from the original media to this directory. Repeat this for every game you want to play.
+| Handheld Button | Function |
+|---|---|
+| **D-Pad (Up / Down / Left / Right)** | Move Virtual Mouse Cursor (adaptive acceleration) |
+| **A** or **L** | Left Mouse Button (Click / Select / Interact) |
+| **B** or **R** | Right Mouse Button (Examine / Cancel / Context Menu) |
+| **Start** | ScummVM Main Menu (Save / Load / Settings) |
+| **Select** or **X** | Space Bar (Skip dialogue lines) |
+| **Y** | Escape key (Pause / Skip cutscenes) |
 
-3. Start ScummVM, choose 'Add game', select the directory containing the game datafiles (do not try to select the datafiles themselves!) and press Choose.
+---
 
-4. The Game Options dialog opens to allow configuration of various settings for the game. These can be reconfigured at any time, but for now everything should be OK at the default settings.
+## Installation
 
-5. Select the game you want to play in the list, and press Start. To play a game next time, skip to step 5, unless you want to add more games.
+### Method 1: Using Pre-built Release Packages (Recommended)
 
->
-> Hint:
->
-> To add multiple games in one go, click the small arrow on the 'Add game' button and choose 'Mass Add'. You are again asked to select a directory, only this time ScummVM will search through all subdirectories for supported games.
+1. Download the release package matching your console:
+   - `scummvm-sf2000-sd.zip` for **Data Frog SF2000**
+   - `scummvm-gb300-sd.zip` for **GB300 / GB300 V2**
+2. Extract the archive directly to the root directory of your console's microSD card.
+3. The archive automatically populates:
+   - `cores/scummvm/` and `system/Deimos/cores/` (Core binaries)
+   - `configs/custom_cores/scummvm/games.opt` (FrogUI core mappings)
+   - `ROMS/scummvm/` (Launchers, games, and `.rgb565` cover art)
+   - `bios/bisrv.asd` (Multicore patched BIOS)
+4. Insert the microSD card into the console and boot.
+5. Navigate to the **ScummVM** section in FrogUI or open `ROMS/scummvm/` and launch any game with **A**.
 
+---
 
+### Method 2: Automatic Installer Script
 
-## Reporting a bug
+If you build from source or have the repository cloned:
 
-To report a bug, go to the ScummVM [Issue Tracker](https://bugs.scummvm.org/) and log in with your GitHub account.
+```bash
+# Insert your microSD card and run:
+./install_to_sd.sh /media/<your_user>/<SD_CARD_MOUNT_POINT>
+```
 
-Please make sure the bug is reproducible, and still occurs in the latest git/[Daily build](https://buildbot.scummvm.org/#/dailybuilds) version. Also check the [compatibility list](https://www.scummvm.org/compatibility/) for that game, to ensure the issue is not already known. Please do not report bugs for games that are not listed as completable on the [Supported Games](https://wiki.scummvm.org/index.php?title=Category:Supported_Games) wiki page, or on the compatibility list. We already know those games have bugs!
+---
 
-Please include the following information in the bug report:
+## Adding New Games
 
-- ScummVM version (test the latest git/[Daily build](https://buildbot.scummvm.org/#/dailybuilds))
-- Bug details, including instructions for how to reproduce the bug. If possible, include log files, screenshots, and any other relevant information.
-- Game language
-- Game version (for example, talkie or floppy)
-- Platform and Compiler (for example, Win32, Linux or FreeBSD)
-- An attached saved game, if possible.
-- If this bug only occurred recently, include the last version without the bug, and the first version with the bug. That way we can fix it quicker by looking at the changes made.
+1. Create a dedicated folder for your game inside `ROMS/scummvm/<game_folder>/`:
+   ```
+   ROMS/scummvm/monkey2/
+   ```
+2. Copy your game data files into that directory.
+3. Create a launcher file in `ROMS/scummvm/<GameName>.gba` containing a single line:
+   ```text
+   scummvm;scummvm/<game_folder>;<startup_file>.
+   ```
+   *(Note the trailing dot `.` at the end of the filename — it ensures multicore argument parsing preserves file extensions).*
 
-Finally, please report each issue separately; do not file multiple issues on the same ticket. It is difficult to track the status of each individual bug when they aren't on their own tickets.
+   **Example:**
+   ```text
+   scummvm;scummvm/monkey2;monkey2.001.
+   ```
+4. *(Optional)* Add a 160×160 RGB565 raw thumbnail named `<GameName>.rgb565` for FrogUI box art.
+5. In `configs/custom_cores/scummvm/games.opt`, add your launcher name:
+   ```text
+   <GameName>.gba|scummvm
+   ```
 
-## Documentation
+---
 
-### User documentation
+## Building from Source
 
-For everything you need to know about how to use ScummVM, see our [user documentation](https://docs.scummvm.org/).
+### Prerequisites
 
-### The ScummVM Wiki
+- Linux (x86_64)
+- Frog MIPS Toolchain (`mipsel-mti-elf-gcc`, `mipsel-mti-elf-g++`) installed in `/opt/frog-toolchain/mipsel-mti-elf_stable/bin`
+- Host build tools: `gcc`, `g++`, `make`, `python3`, `ffmpeg`
 
-[The wiki](https://wiki.scummvm.org/) is the place to go for information about every game supported by ScummVM. If you're a developer, there's also some very handy information in the Developer section.
+### Compile Core & Runner
 
-### Changelog
+```bash
+# 1. Compile ScummVM static library for SF2000/GB300:
+make -f Makefile.port core
 
-Our extensive change log is available [here](NEWS.md).
+# 2. Build the PC test runner:
+make -f Makefile.port runner
 
-## SAST Tools
+# 3. Test on PC and produce frame dumps / screenshots:
+make -f Makefile.port test
 
-[PVS-Studio](https://pvs-studio.com/en/pvs-studio/?utm_source=github&utm_medium=organic&utm_campaign=open_source) - static analyzer for C, C++, C#, and Java code.
+# 4. Build final console packages (.sf2k / .gb3k and SD distribution):
+make -f Makefile.port device
+```
 
-## Credits
+---
 
-A massive thank you to the entire team for making the ScummVM project possible. See the credits [here](AUTHORS)!
+## Architecture & Technical Details
 
------
+1. **Bare-Metal Coroutine Context Switching (`sjlj_sf2000.c`):**
+   ScummVM runs its virtual machine threads using coroutines (`libco`). The standard MIPS `setjmp`/`longjmp` implementation was replaced with `sjlj_sf2000.c`, strictly adhering to MIPS O32 ABI requirements with 16-byte stack frame alignment and parameter save reserves.
+2. **Deterministic Framebuffer Delivery:**
+   Forces pure software RGB565 rendering (`VIDEO_GRAPHIC_MODE_REQUEST_SW`) avoiding OpenGL HW context calls that cause white-screen lockups on non-accelerated framebuffers.
+3. **Null-Safe Initial State:**
+   Guards early input polling and window metric queries prior to the first graphic surface commit, preventing `nullptr` exceptions during bootup.
 
-> Good Luck and Happy Adventuring\!
-> The ScummVM team.
-> <https://www.scummvm.org/>
+---
+
+## License & Credits
+
+- **ScummVM:** Distributed under the terms of the **GNU General Public License v3.0 (GPLv3)**. See `COPYING` for full details.
+- **Multicore / FrogUI:** Built with the Data Frog SF2000 / GB300 open-source development ecosystem.
+- Individual games, logos, and trademarks belong to their respective copyright holders.

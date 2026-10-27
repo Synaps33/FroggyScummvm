@@ -27,7 +27,7 @@ FORCE_OPENGL     ?= 0
 FORCE_OPENGLES2  ?= 0
 FORCE_OPENGLNONE ?= 0
 
-DEBUG_ALLOW_DIRTY_SUBMODULES ?= 0
+DEBUG_ALLOW_DIRTY_SUBMODULES ?= 1
 
 # Variable engines dependencies
 UNAVAILABLE_DEPS :=
@@ -168,11 +168,19 @@ else
 DEFINES += -DUSE_MPCDEC
 endif
 
-USE_TINYGL        = 1
+USE_TINYGL        ?= 1
+ifeq ($(USE_TINYGL),1)
 DEFINES += -DUSE_TINYGL
+else
+UNAVAILABLE_DEPS += component_tinygl
+endif
 
-USE_LUA           = 1
+USE_LUA           ?= 1
+ifeq ($(USE_LUA),1)
 DEFINES += -DUSE_LUA
+else
+UNAVAILABLE_DEPS += component_lua
+endif
 
 USE_INDEO3        = 1
 DEFINES += -DUSE_INDEO3

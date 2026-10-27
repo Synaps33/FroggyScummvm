@@ -16,6 +16,12 @@
  */
 
 #include <unistd.h>
+#if defined(SF2000) || defined(GB300)
+extern "C" int dly_tsk(unsigned ms);
+#ifndef usleep
+#define usleep(us) dly_tsk(((us) + 999) / 1000)
+#endif
+#endif
 #include <features/features_cpu.h>
 
 #include "common/list.h"
@@ -73,9 +79,12 @@ void OSystem_libretro::resetQuit() {
 
 void OSystem_libretro::setMousePosition(int x, int y) {
 #ifdef USE_OPENGL
-	if (retro_get_video_hw_mode() & VIDEO_GRAPHIC_MODE_REQUEST_HW)
-		dynamic_cast<LibretroOpenGLGraphics *>(_graphicsManager)->setMousePosition(x, y);
-	else
+	if (retro_get_video_hw_mode() & VIDEO_GRAPHIC_MODE_REQUEST_HW) {
+		if (_graphicsManager)
+			dynamic_cast<LibretroOpenGLGraphics *>(_graphicsManager)->setMousePosition(x, y);
+		return;
+	}
 #endif
+	if (_graphicsManager)
 		dynamic_cast<LibretroGraphics *>(_graphicsManager)->setMousePosition(x, y);
 }

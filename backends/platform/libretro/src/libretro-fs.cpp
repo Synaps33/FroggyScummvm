@@ -572,6 +572,10 @@ AbstractFSNode *LibRetroFilesystemNode::getParent() const {
 		return 0;
 	}
 
+	// Remove trailing slash unless it is the root "/"
+	while (end > start + 1 && *(end - 1) == '/')
+		end--;
+
 	Common::String posixParentPath(start, end);
 
 	AbstractFSNode *parent = makeNode(posixParentPath);

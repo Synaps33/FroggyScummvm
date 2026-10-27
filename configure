@@ -1259,7 +1259,7 @@ Some influential environment variables:
   WINDRESFLAGS       Windows resource compiler flags
 
 EOF
-		exit 0
+		return 0
 	fi
 done # for parm in ...
 

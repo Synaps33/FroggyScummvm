@@ -115,316 +115,140 @@ void OSystem_libretro::getMouseXYFromButton(bool is_x, int16 sign) {
 }
 
 void OSystem_libretro::processInputs(void) {
-	int16 x, y;
-	float deltaAcc;
-	int key_modifiers [3][2] = {{RETROKE_SHIFT_MOD, RETROKMOD_SHIFT}, {RETROKE_CTRL_MOD, RETROKMOD_CTRL}, {RETROKE_ALT_MOD, RETROKMOD_ALT}};
-	int key_flags = 0;
-	int retropad_value = 0;
+	if (!retro_input_cb || !_graphicsManager)
+		return;
 
-	static const uint32 retroButtons[2] = {RETRO_DEVICE_ID_MOUSE_LEFT, RETRO_DEVICE_ID_MOUSE_RIGHT};
-	static const Common::EventType eventID[2][2] = {{Common::EVENT_LBUTTONDOWN, Common::EVENT_LBUTTONUP}, {Common::EVENT_RBUTTONDOWN, Common::EVENT_RBUTTONUP}};
+	// 1. Direct Joypad Polling for SF2000 / Handheld consoles
+	bool up     = retro_input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP);
+	bool down   = retro_input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN);
+	bool left   = retro_input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT);
+	bool right  = retro_input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT);
+	bool btn_a  = retro_input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A);
+	bool btn_b  = retro_input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B);
+	bool btn_x  = retro_input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X);
+	bool btn_y  = retro_input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y);
+	bool start  = retro_input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START);
+	bool select = retro_input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT);
+	bool btn_l  = retro_input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L);
+	bool btn_r  = retro_input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R);
 
-	_cursorStatus = 0;
+	int screen_w = getScreenWidth();
+	int screen_h = getScreenHeight();
+	if (screen_w <= 0) screen_w = 320;
+	if (screen_h <= 0) screen_h = 240;
 
-	// Process input from RetroPad
-	mapper_poll_device();
-
-	// Reduce cursor speed, if required
-	if (retro_get_input_device() == RETRO_DEVICE_JOYPAD && mapper_get_mapper_key_status(RETROKE_FINE_CONTROL)) {
-		_cursorStatus |= CURSOR_STATUS_DOING_SLOWER;
-	} else {
-		_cursorStatus &= ~CURSOR_STATUS_DOING_SLOWER;
+	static bool s_pos_initialized = false;
+	if (!s_pos_initialized) {
+		_mouseX = screen_w / 2;
+		_mouseY = screen_h / 2;
+		s_pos_initialized = true;
+		setMousePosition(_mouseX, _mouseY);
 	}
 
-	// Handle x,y
-	int x_coor_cursor = mapper_get_mapper_key_value(RETROKE_RIGHT) - mapper_get_mapper_key_value(RETROKE_LEFT);
-	int y_coor_cursor = mapper_get_mapper_key_value(RETROKE_DOWN) - mapper_get_mapper_key_value(RETROKE_UP);
+	static int s_dpad_held_frames = 0;
+	bool moving = up || down || left || right;
+	if (moving) {
+		s_dpad_held_frames++;
+	} else {
+		s_dpad_held_frames = 0;
+	}
 
-	if (abs(x_coor_cursor) > 1) {
-		getMouseXYFromAnalog(true, x_coor_cursor);
-	} else
-		getMouseXYFromButton(true, x_coor_cursor);
+	int speed = 2;
+	if (s_dpad_held_frames > 6)  speed = 4;
+	if (s_dpad_held_frames > 16) speed = 7;
 
-	if (abs(y_coor_cursor) > 1)
-		getMouseXYFromAnalog(false, y_coor_cursor);
-	else
-		getMouseXYFromButton(false, y_coor_cursor);
+	int old_x = _mouseX;
+	int old_y = _mouseY;
 
-	if (_cursorStatus & CURSOR_STATUS_DOING_JOYSTICK) {
+	if (up)    _mouseY -= speed;
+	if (down)  _mouseY += speed;
+	if (left)  _mouseX -= speed;
+	if (right) _mouseX += speed;
+
+	if (_mouseX < 0) _mouseX = 0;
+	if (_mouseX >= screen_w) _mouseX = screen_w - 1;
+	if (_mouseY < 0) _mouseY = 0;
+	if (_mouseY >= screen_h) _mouseY = screen_h - 1;
+
+	if (_mouseX != old_x || _mouseY != old_y) {
 		Common::Event ev;
 		ev.type = Common::EVENT_MOUSEMOVE;
 		ev.mouse.x = _mouseX;
 		ev.mouse.y = _mouseY;
-		ev.relMouse.x = _cursorStatus & CURSOR_STATUS_DOING_X ? _relMouseX : 0;
-		ev.relMouse.y = _cursorStatus & CURSOR_STATUS_DOING_Y ? _relMouseY : 0;
+		ev.relMouse.x = _mouseX - old_x;
+		ev.relMouse.y = _mouseY - old_y;
 		_events.push_back(ev);
 		setMousePosition(_mouseX, _mouseY);
 	}
 
-	// Handle special functions
-	if (mapper_get_mapper_key_value(RETROKE_SCUMMVM_GUI)) {
+	// Left Click: A or L button
+	static bool s_lclick_held = false;
+	bool lclick = btn_a || btn_l;
+	if (lclick && !s_lclick_held) {
+		s_lclick_held = true;
+		Common::Event ev;
+		ev.type = Common::EVENT_LBUTTONDOWN;
+		ev.mouse.x = _mouseX;
+		ev.mouse.y = _mouseY;
+		_events.push_back(ev);
+	} else if (!lclick && s_lclick_held) {
+		s_lclick_held = false;
+		Common::Event ev;
+		ev.type = Common::EVENT_LBUTTONUP;
+		ev.mouse.x = _mouseX;
+		ev.mouse.y = _mouseY;
+		_events.push_back(ev);
+	}
+
+	// Right Click: B or R button
+	static bool s_rclick_held = false;
+	bool rclick = btn_b || btn_r;
+	if (rclick && !s_rclick_held) {
+		s_rclick_held = true;
+		Common::Event ev;
+		ev.type = Common::EVENT_RBUTTONDOWN;
+		ev.mouse.x = _mouseX;
+		ev.mouse.y = _mouseY;
+		_events.push_back(ev);
+	} else if (!rclick && s_rclick_held) {
+		s_rclick_held = false;
+		Common::Event ev;
+		ev.type = Common::EVENT_RBUTTONUP;
+		ev.mouse.x = _mouseX;
+		ev.mouse.y = _mouseY;
+		_events.push_back(ev);
+	}
+
+	// Start: ScummVM Menu / Pause
+	static bool s_start_held = false;
+	if (start && !s_start_held) {
+		s_start_held = true;
 		Common::Event ev;
 		ev.type = Common::EVENT_MAINMENU;
 		_events.push_back(ev);
+	} else if (!start && s_start_held) {
+		s_start_held = false;
 	}
 
-	if ((mapper_get_mapper_key_status(RETROKE_VKBD) & ((1 << RETRO_DEVICE_KEY_STATUS) | (1 << RETRO_DEVICE_KEY_CHANGED))) == ((1 << RETRO_DEVICE_KEY_STATUS) | (1 << RETRO_DEVICE_KEY_CHANGED))) {
-		Common::Event ev;
-		ev.type = Common::EVENT_VIRTUAL_KEYBOARD;
-		_events.push_back(ev);
+	// Space (dialog skip): Select or X button
+	static bool s_space_held = false;
+	bool space_btn = select || btn_x;
+	if (space_btn && !s_space_held) {
+		s_space_held = true;
+		processKeyEvent(true, Common::KEYCODE_SPACE, ' ', 0);
+	} else if (!space_btn && s_space_held) {
+		s_space_held = false;
+		processKeyEvent(false, Common::KEYCODE_SPACE, ' ', 0);
 	}
 
-
-	// Handle mouse buttons
-	retropad_value = mapper_get_mapper_key_status(RETROKE_LEFT_BUTTON);
-	if (retropad_value & (1 << RETRO_DEVICE_KEY_CHANGED)) {
-		Common::Event ev;
-		ev.type = eventID[0][(retropad_value & (1 << RETRO_DEVICE_KEY_STATUS)) ? 0 : 1];
-		ev.mouse.x = _mouseX;
-		ev.mouse.y = _mouseY;
-		_events.push_back(ev);
-	}
-
-	retropad_value = mapper_get_mapper_key_status(RETROKE_RIGHT_BUTTON);
-	if (retropad_value & (1 << RETRO_DEVICE_KEY_CHANGED)) {
-		Common::Event ev;
-		ev.type = eventID[1][(retropad_value & (1 << RETRO_DEVICE_KEY_STATUS)) ? 0 : 1];
-		ev.mouse.x = _mouseX;
-		ev.mouse.y = _mouseY;
-		_events.push_back(ev);
-	}
-
-	// Handle keyboard buttons
-	for (uint8 i = 0; i < sizeof(key_modifiers) / sizeof(key_modifiers[0]); i++) {
-		if (mapper_get_mapper_key_value(key_modifiers[i][0]))
-			key_flags |= key_modifiers[i][1];
-	}
-
-	for (uint8 i = 0; i < RETRO_DEVICE_ID_JOYPAD_LAST; i++) {
-		if (mapper_get_device_key_retro_id(i) <= 0)
-			continue;
-		retropad_value = mapper_get_device_key_status(i);
-
-		if (retropad_value & (1 << RETRO_DEVICE_KEY_CHANGED)) {
-			processKeyEvent((retropad_value & (1 << RETRO_DEVICE_KEY_STATUS)), mapper_get_device_key_scummvm_id(i), 0, key_flags);
-		}
-	}
-
-	if (retro_setting_get_pointer_device() == RETRO_DEVICE_POINTER) {
-		int p_x     = retro_input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_X);
-		int p_y     = retro_input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_Y);
-		int p_press = retro_input_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_PRESSED);
-
-		int px = (int)((p_x + 0x7fff) * getScreenWidth()  / 0xffff);
-		int py = (int)((p_y + 0x7fff) * getScreenHeight() / 0xffff);
-
-		static const int TAP_MAX_FRAMES    = (20 * retro_setting_get_frame_rate()) / 60;
-		static const int LONG_MIN_FRAMES   = (40 * retro_setting_get_frame_rate()) / 60;
-		static const int MOVE_THRESHOLD_PX = 8;
-
-		static bool wasPressed = false;
-		static int  holdFrames = 0;
-		static bool dragging   = false;
-		static int  startX     = 0;
-		static int  startY     = 0;
-		static int  lastX      = 0;
-		static int  lastY      = 0;
-
-		static bool leftDown       = false;
-		static bool leftUpPending  = false;
-		static int  leftUpDelay    = 0;
-		static int  leftDownX      = 0;
-		static int  leftDownY      = 0;
-		static bool rightDown      = false;
-
-		// DOWN edge: start tracking
-		if (p_press && !wasPressed) {
-			// If a fast tap armed a deferred LEFT UP, a new press within TAP_MAX_FRAMES
-			// turns it into a tap-hold (drag). In that case we must NOT emit LEFT UP here.
-			if (leftUpPending) {
-				leftUpPending = false;
-				leftUpDelay   = 0;
-			}
-
-			wasPressed = true;
-			holdFrames = 0;
-			dragging   = false;
-
-			startX = lastX = px;
-			startY = lastY = py;
-
-			// Move cursor immediately to touch point
-			_mouseX = px;
-			_mouseY = py;
-
-			Common::Event ev;
-			ev.type = Common::EVENT_MOUSEMOVE;
-			ev.mouse.x = _mouseX;
-			ev.mouse.y = _mouseY;
-			ev.relMouse.x = 0;
-			ev.relMouse.y = 0;
-			_events.push_back(ev);
-			setMousePosition(_mouseX, _mouseY);
-		}
-
-		// PRESSED: track move + possibly long click
-		if (p_press && wasPressed) {
-			holdFrames++;
-
-			// Determine if we've moved too much (drag)
-			if (!dragging && (abs(px - startX) > MOVE_THRESHOLD_PX || abs(py - startY) > MOVE_THRESHOLD_PX))
-				dragging = true;
-
-			// Always move cursor while pressed
-			if (px != lastX || py != lastY) {
-				_mouseX = px;
-				_mouseY = py;
-
-				Common::Event ev;
-				ev.type = Common::EVENT_MOUSEMOVE;
-				ev.mouse.x = _mouseX;
-				ev.mouse.y = _mouseY;
-				ev.relMouse.x = px - lastX;
-				ev.relMouse.y = py - lastY;
-				_events.push_back(ev);
-				setMousePosition(_mouseX, _mouseY);
-
-				lastX = px;
-				lastY = py;
-			}
-
-			// Long press triggers RIGHT DOWN automatically BEFORE release
-			if (!rightDown && !leftDown && !dragging && holdFrames >= LONG_MIN_FRAMES) {
-				Common::Event ev;
-				ev.type = eventID[1][0];
-				ev.mouse.x = startX;
-				ev.mouse.y = startY;
-				_events.push_back(ev);
-
-				rightDown = true;
-
-				// After long click, remain pressed behaves like drag/move (no more clicks)
-				dragging = true;
-			}
-		}
-
-		// UP edge:
-		// - If RIGHT is down (long press), emit RIGHT UP on release at final coordinates.
-		// - If LEFT is down from a chained tap->tap-hold, emit LEFT UP on release at final coordinates.
-		// - Otherwise, a fast tap arms a LEFT click by emitting LEFT DOWN now and deferring LEFT UP
-		if (!p_press && wasPressed) {
-			wasPressed = false;
-
-			// Release RIGHT (long press) at final coordinates
-			if (rightDown) {
-				Common::Event ev;
-				ev.type = eventID[1][1];
-				ev.mouse.x = px;
-				ev.mouse.y = py;
-				_events.push_back(ev);
-				rightDown = false;
-			}
-			// Release LEFT (tap-drag) at final coordinates
-			else if (leftDown && !leftUpPending) {
-				Common::Event ev;
-				ev.type = eventID[0][1];
-				ev.mouse.x = px;
-				ev.mouse.y = py;
-				_events.push_back(ev);
-				leftDown = false;
-			}
-			// Normal fast tap: emit LEFT DOWN and defer LEFT UP
-			else if (!dragging) {
-				if ((abs(px - startX) <= MOVE_THRESHOLD_PX && abs(py - startY) <= MOVE_THRESHOLD_PX) &&
-				        holdFrames <= TAP_MAX_FRAMES) {
-					Common::Event ev;
-					ev.type = eventID[0][0];
-					ev.mouse.x = startX;
-					ev.mouse.y = startY;
-					_events.push_back(ev);
-
-					leftDown      = true;
-					leftDownX     = startX;
-					leftDownY     = startY;
-					leftUpPending = true;
-					leftUpDelay   = (TAP_MAX_FRAMES > 0) ? TAP_MAX_FRAMES : 1;
-				}
-			}
-
-			holdFrames = 0;
-			dragging = false;
-		}
-
-		// Handle deferred LEFT UP (tap)
-		if (leftUpPending && !wasPressed) {
-			if (leftUpDelay > 0)
-				leftUpDelay--;
-			if (leftUpDelay <= 0) {
-				Common::Event ev;
-				ev.type = eventID[0][1]; // LEFT UP
-				ev.mouse.x = leftDownX;
-				ev.mouse.y = leftDownY;
-				_events.push_back(ev);
-				leftUpPending = false;
-				leftDown = false;
-			}
-		}
-	} else if (retro_setting_get_pointer_device() == RETRO_DEVICE_MOUSE) {
-		// Process input from physical mouse
-		x = retro_input_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
-		y = retro_input_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
-
-		// > X Axis
-		if (x != 0) {
-			_cursorStatus |= (CURSOR_STATUS_DOING_MOUSE | CURSOR_STATUS_DOING_X);
-			if (x > 0) {
-				// Reset accumulator when changing direction
-				_mouseXAcc = (_mouseXAcc < 0.0) ? 0.0 : _mouseXAcc;
-			}
-			if (x < 0) {
-				// Reset accumulator when changing direction
-				_mouseXAcc = (_mouseXAcc > 0.0) ? 0.0 : _mouseXAcc;
-			}
-			deltaAcc = (float)x * retro_setting_get_mouse_speed();
-			updateMouseXY(deltaAcc, &_mouseXAcc, 1);
-		}
-		// > Y Axis
-		if (y != 0) {
-			_cursorStatus |= (CURSOR_STATUS_DOING_MOUSE | CURSOR_STATUS_DOING_Y);
-			if (y > 0) {
-				// Reset accumulator when changing direction
-				_mouseYAcc = (_mouseYAcc < 0.0) ? 0.0 : _mouseYAcc;
-			}
-			if (y < 0) {
-				// Reset accumulator when changing direction
-				_mouseYAcc = (_mouseYAcc > 0.0) ? 0.0 : _mouseYAcc;
-			}
-			deltaAcc = (float)y * retro_setting_get_mouse_speed();
-			updateMouseXY(deltaAcc, &_mouseYAcc, 0);
-		}
-
-		if (_cursorStatus & CURSOR_STATUS_DOING_MOUSE) {
-			Common::Event ev;
-			ev.type = Common::EVENT_MOUSEMOVE;
-			ev.mouse.x = _mouseX;
-			ev.mouse.y = _mouseY;
-			ev.relMouse.x = _cursorStatus & CURSOR_STATUS_DOING_X ? _relMouseX : 0;
-			ev.relMouse.y = _cursorStatus & CURSOR_STATUS_DOING_Y ? _relMouseY : 0;
-			_events.push_back(ev);
-			setMousePosition(_mouseX, _mouseY);
-		}
-
-		for (int i = 0; i < 2; i++) {
-			Common::Event ev;
-			bool down = retro_input_cb(0, RETRO_DEVICE_MOUSE, 0, retroButtons[i]);
-			if (down != _mouseButtons[i]) {
-				_mouseButtons[i] = down;
-				ev.type = eventID[i][down ? 0 : 1];
-				ev.mouse.x = _mouseX;
-				ev.mouse.y = _mouseY;
-				_events.push_back(ev);
-			}
-		}
+	// Escape (cancel/pause): Y button
+	static bool s_esc_held = false;
+	if (btn_y && !s_esc_held) {
+		s_esc_held = true;
+		processKeyEvent(true, Common::KEYCODE_ESCAPE, 27, 0);
+	} else if (!btn_y && s_esc_held) {
+		s_esc_held = false;
+		processKeyEvent(false, Common::KEYCODE_ESCAPE, 27, 0);
 	}
 }
 

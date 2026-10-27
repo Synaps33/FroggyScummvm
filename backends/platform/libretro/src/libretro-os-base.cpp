@@ -156,11 +156,17 @@ void OSystem_libretro::resetGraphicsContext(void) {
 #endif
 
 int16 OSystem_libretro::getScreenWidth(void) {
-	return dynamic_cast<WindowedGraphicsManager *>(_graphicsManager)->getWindowWidth();
+	if (!_graphicsManager) return 320;
+	WindowedGraphicsManager *wgm = dynamic_cast<WindowedGraphicsManager *>(_graphicsManager);
+	int16 w = wgm ? wgm->getWindowWidth() : 320;
+	return (w > 0) ? w : 320;
 }
 
 int16 OSystem_libretro::getScreenHeight(void) {
-	return dynamic_cast<WindowedGraphicsManager *>(_graphicsManager)->getWindowHeight();
+	if (!_graphicsManager) return 240;
+	WindowedGraphicsManager *wgm = dynamic_cast<WindowedGraphicsManager *>(_graphicsManager);
+	int16 h = wgm ? wgm->getWindowHeight() : 240;
+	return (h > 0) ? h : 240;
 }
 
 void OSystem_libretro::resetGraphicsManager(void) {

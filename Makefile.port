@@ -1,0 +1,44 @@
+TARGET_NAME := scummvm
+ROOT_DIR := $(CURDIR)
+LIBRETRO_DIR := $(ROOT_DIR)/backends/platform/libretro
+RUNNER_DIR := $(ROOT_DIR)/runner
+DIST_DIR := $(ROOT_DIR)/dist
+MULTICORE := /home/Sajnaps/gb300/sf2000_multicore
+
+.PHONY: all test runner core device install clean
+
+all: runner
+
+core:
+	$(MAKE) -C $(LIBRETRO_DIR) platform=sf2000 -j$(shell nproc)
+
+runner:
+	g++ -O2 -I$(LIBRETRO_DIR)/deps/libretro-common/include -o $(RUNNER_DIR)/test_runner $(RUNNER_DIR)/test_runner.cpp -ldl
+
+test: runner
+	mkdir -p $(ROOT_DIR)/screenshots
+	$(RUNNER_DIR)/test_runner $(LIBRETRO_DIR)/scummvm_libretro.so $(ROOT_DIR)/test_roms/monkey-demo/disk01.lec 500 $(ROOT_DIR)/screenshots/tour tour
+	$(RUNNER_DIR)/test_runner $(LIBRETRO_DIR)/scummvm_libretro.so $(ROOT_DIR)/test_roms/atlantis-demo/PLAYFATE.001 500 $(ROOT_DIR)/screenshots/indy tour
+	@python3 -c "import glob, subprocess; [subprocess.run(['ffmpeg', '-y', '-i', f, f[:-4]+'.png'], stderr=subprocess.DEVNULL) for f in glob.glob('$(ROOT_DIR)/screenshots/*.ppm')]"
+	@ls -lh $(ROOT_DIR)/screenshots/*.png
+
+device: core
+	mkdir -p $(DIST_DIR) $(ROOT_DIR)/build_core
+	echo -e "all:\n\t@true\nclean:\n\t@true\n" > $(ROOT_DIR)/build_core/Makefile
+	cp -f $(LIBRETRO_DIR)/scummvm_libretro_sf2000.a $(ROOT_DIR)/build_core/scummvm_libretro_sf2000.a
+	$(MAKE) -C $(MULTICORE) clean
+	$(MAKE) -C $(MULTICORE) CORE=$(ROOT_DIR)/build_core CONSOLE=scummvm FROGGY_TYPE=SF2000
+	cp -f $(MULTICORE)/build/core_87000000 $(DIST_DIR)/scummvm.sf2k
+	cp -f $(MULTICORE)/build/bisrv.asd $(DIST_DIR)/bisrv_sf2000.asd
+	$(MAKE) -C $(MULTICORE) clean
+	$(MAKE) -C $(MULTICORE) CORE=$(ROOT_DIR)/build_core CONSOLE=scummvm FROGGY_TYPE=GB300V2
+	cp -f $(MULTICORE)/build/core_87000000 $(DIST_DIR)/scummvm.gb3k
+	cp -f $(MULTICORE)/build/bisrv.asd $(DIST_DIR)/bisrv_gb300.asd
+	python3 $(ROOT_DIR)/tools/package.py
+
+install:
+	$(ROOT_DIR)/install_to_sd.sh
+
+clean:
+	rm -rf $(DIST_DIR) $(ROOT_DIR)/build_core $(RUNNER_DIR)/test_runner
+	find $(LIBRETRO_DIR) -name "*.o" -delete -o -name "*.a" -delete

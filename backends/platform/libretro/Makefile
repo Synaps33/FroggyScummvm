@@ -28,6 +28,7 @@ TARGET_64BIT := $(BUILD_64BIT)
 
 LD        = $(CXX)
 AR       := ar cru
+AR_ALONE ?= ar
 RANLIB   := ranlib
 LS       := ls
 MKDIR    := mkdir -p
@@ -490,6 +491,49 @@ else ifneq (,$(findstring windows_msvc2017,$(platform)))
    LDFLAGS += -DLL
    HAVE_OPENGL := 1
 
+# Data Frog SF2000 / GB300
+else ifeq ($(platform), sf2000)
+   TARGET := $(TARGET_NAME)_libretro_sf2000.a
+   MIPS ?= /opt/frog-toolchain/mipsel-mti-elf_stable/bin/mipsel-mti-elf-
+   CC = $(MIPS)gcc
+   CXX = $(MIPS)g++
+   LD = $(MIPS)ld
+   AR = $(MIPS)ar rcs
+   AR_ALONE = $(MIPS)ar
+   RANLIB = $(MIPS)ranlib
+   BUILD_64BIT := 0
+   TARGET_64BIT := 0
+   MIPS_FLAGS := -EL -march=mips32 -mtune=mips32r2 -msoft-float -O2 -G0 \
+                 -mno-abicalls -fno-pic -ffunction-sections -fdata-sections \
+                 -fno-unwind-tables -fno-asynchronous-unwind-tables -fomit-frame-pointer \
+                 -DSF2000 -DGB300 -D__LIBRETRO__ -DREDUCE_MEMORY_USAGE -DUNCACHED_PLUGINS \
+                 -DDEFAULT_PERF_TUNER -DHAVE_POSIX_MEMALIGN=0 -DHAVE_MEMALIGN=0 \
+                 -DSIZEOF_SIZE_T=4 -I/home/Sajnaps/gb300/sf2000_multicore/include
+   DEFINES += $(MIPS_FLAGS) -I$(SCUMMVM_PATH)/backends/platform/libretro/deps/libretro-common/include
+   CFLAGS += -std=gnu99 $(MIPS_FLAGS)
+   CXXFLAGS += -std=c++11 $(MIPS_FLAGS) -fno-exceptions -fno-threadsafe-statics
+   LITE := 1
+   STATIC_LINKING = 1
+   FORCE_OPENGLNONE := 1
+   USE_HIGHRES := 0
+   USE_MT32EMU := 0
+   USE_BINK := 0
+   USE_TINYGL := 0
+   USE_LUA := 0
+   USE_IMGUI := 0
+   USE_ENET := 0
+   USE_MPEG2 := 0
+   USE_GIF := 0
+   USE_FRIBIDI := 0
+   USE_THEORADEC := 0
+   USE_FAAD := 0
+   USE_FLAC := 0
+   USE_VORBIS := 0
+   USE_TREMOR := 0
+   USE_FREETYPE2 := 0
+   USE_FLUIDSYNTH := 0
+   USE_LIBCO := 1
+
 else ifeq ($(platform), win)
    # let out for next test block
 
@@ -671,7 +715,7 @@ $(TARGET): $(OBJS) libdeps.a libdetect.a
 	$(MKDIR) libtemp
 	$(CP) $+ libtemp/
 	@echo Linking $@...
-	$(AR) -M < $(ROOT_PATH)/script.mri
+	$(AR_ALONE) -M < $(ROOT_PATH)/script.mri
 else
 $(TARGET): $(DETECT_OBJS) $(OBJS) libdeps.a
 	@echo Linking $@...

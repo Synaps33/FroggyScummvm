@@ -21,6 +21,8 @@
 
 #define FORBIDDEN_SYMBOL_ALLOW_ALL
 
+#include <stdio.h>
+#include <unistd.h>
 #include "backends/fs/posix/posix-iostream.h"
 
 #include <sys/stat.h>
@@ -30,6 +32,9 @@ PosixIoStream::PosixIoStream(void *handle) :
 }
 
 int64 PosixIoStream::size() const {
+#if defined(SF2000) || defined(GB300)
+	return StdioStream::size();
+#else
 	int fd = fileno((FILE *)_handle);
 	if (fd == -1) {
 		return StdioStream::size();
@@ -43,4 +48,5 @@ int64 PosixIoStream::size() const {
 	}
 
 	return st.st_size;
+#endif
 }
